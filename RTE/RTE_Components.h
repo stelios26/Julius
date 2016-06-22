@@ -4,7 +4,7 @@
  *      *** Do not modify ! ***
  *
  * Project: 'Julius' 
- * Target:  'nRF51822' 
+ * Target:  'Target 1' 
  */
 
 #ifndef RTE_COMPONENTS_H
