@@ -21,13 +21,15 @@
 #include "pstorage.h"
 #include "nrf_delay.h"
 #include "led.h"
+#include "nrf_adc.h"
+#include "stepper.h"
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT  1                                          /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
 #define CENTRAL_LINK_COUNT               0                                          /**<number of central links used by the application. When changing this number remember to adjust the RAM settings*/
 #define PERIPHERAL_LINK_COUNT            1                                          /**<number of peripheral links used by the application. When changing this number remember to adjust the RAM settings*/
 
-#define DEVICE_NAME                      "Commpass"                               	/**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                      "Compass"                               	/**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                "Tour"                      								/**< Manufacturer. Will be passed to Device Information Service. */
 #define APP_ADV_INTERVAL                 160                                        /**< The advertising interval (in units of 0.625 ms. This value corresponds to 25 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS       180                                        /**< The advertising timeout in units of seconds. */
@@ -36,6 +38,7 @@
 #define APP_TIMER_OP_QUEUE_SIZE          4                                          /**< Size of timer operation queues. */
 
 #define BATTERY_LEVEL_MEAS_INTERVAL      APP_TIMER_TICKS(2000, APP_TIMER_PRESCALER) /**< Battery level measurement interval (ticks). */
+#define TEMPERATURE_MEAS_INTERVAL          		APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER) 	/**< Battery level measurement interval (ticks). */
 
 #define MIN_CONN_INTERVAL                MSEC_TO_UNITS(400, UNIT_1_25_MS)           /**< Minimum acceptable connection interval (0.4 seconds). */
 #define MAX_CONN_INTERVAL                MSEC_TO_UNITS(650, UNIT_1_25_MS)           /**< Maximum acceptable connection interval (0.65 second). */
@@ -68,7 +71,10 @@ STATIC_ASSERT(IS_SRVC_CHANGED_CHARACT_PRESENT);                                 
 static uint16_t                          m_conn_handle = BLE_CONN_HANDLE_INVALID;   /**< Handle of the current connection. */
 static ble_bas_t                         m_bas;                                     /**< Structure used to identify the battery service. */
 
+ble_cch_t m_cch_service;
+
 APP_TIMER_DEF(m_battery_timer_id);                                                  /**< Battery timer. */
+APP_TIMER_DEF(m_temperature_timer_id);
 
 static dm_application_instance_t         m_app_handle;                              /**< Application identifier allocated by device manager */
 
@@ -95,6 +101,28 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
+static void temperature_timeout_handler(void * p_context)
+{
+    // Update temperature and characteristic value.
+    int32_t temperature = 0;    // Declare variable holding temperature value
+    static int32_t previous_temperature = 15; // Declare a variable to store current temperature until next measurement.
+    
+		//nrf_adc_start();
+  
+		//full scale 1.2V is 10 bits 1024, prescaler * 3, -750 for 0 then add 25 which is 750 and 10mv per C after that.
+		temperature = 25;
+	
+    
+    // Check if current temperature is different from last temperature
+    if(temperature != previous_temperature)
+    {
+        // If new temperature then send notification
+        cch_termperature_characteristic_update(&m_cch_service, &temperature);
+    }
+    
+    // Save current temperature until next measurement
+    previous_temperature = temperature;
+}
 
 /**@brief Function for performing battery measurement and updating the Battery Level characteristic
  *        in Battery Service.
@@ -103,8 +131,30 @@ static void battery_level_update(void)
 {
     uint32_t err_code;
     uint8_t  battery_level;
-
-    battery_level = 0xaa;
+		uint8_t USB_status;
+		uint8_t charge_status;
+	
+		nrf_adc_start();
+	
+		if (adc_result > 200)
+		{
+				USB_status = USB_CONNECTED;
+				if (is_charging())
+				{
+					charge_status = CHARGING;
+				}
+				else
+				{
+					charge_status = NOT_CHARGING;
+				}
+		}
+		else
+		{
+				USB_status = USB_DISCONNECTED;
+				charge_status = NOT_CHARGING;
+		}
+		
+    battery_level = (USB_status | charge_status) | (50);
 
     err_code = ble_bas_battery_level_update(&m_bas, battery_level);
     if ((err_code != NRF_SUCCESS) &&
@@ -147,6 +197,11 @@ static void timers_init(void)
                                 APP_TIMER_MODE_REPEATED,
                                 battery_level_meas_timeout_handler);
     APP_ERROR_CHECK(err_code);
+	
+		err_code = app_timer_create(&m_temperature_timer_id,
+                              APP_TIMER_MODE_REPEATED,
+                              temperature_timeout_handler);
+		APP_ERROR_CHECK(err_code);
 }
 
 
@@ -315,6 +370,9 @@ static void services_init(void)
     err_code = ble_dis_init(&dis_init);
     APP_ERROR_CHECK(err_code);
 
+		// Initialize CCH custom Service.
+		cch_service_init(&m_cch_service);
+		
 #ifdef BLE_DFU_APP_SUPPORT
     /** @snippet [DFU BLE Service initialization] */
     ble_dfu_init_t   dfus_init;
@@ -447,14 +505,19 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
  */
 static void on_ble_evt(ble_evt_t * p_ble_evt)
 {
+//	  uint32_t err_code;
     switch (p_ble_evt->header.evt_id)
             {
         case BLE_GAP_EVT_CONNECTED:
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+						app_timer_start(m_temperature_timer_id, TEMPERATURE_MEAS_INTERVAL, NULL);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
+						//err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
+            //APP_ERROR_CHECK(err_code);
+						app_timer_stop(m_temperature_timer_id);
             break;
 
         default:
@@ -502,6 +565,7 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 #endif // BLE_DFU_APP_SUPPORT
     on_ble_evt(p_ble_evt);
     ble_advertising_on_ble_evt(p_ble_evt);
+		ble_cch_service_on_ble_evt(&m_cch_service, p_ble_evt);
 }
 
 
@@ -542,6 +606,9 @@ static void ble_stack_init(void)
     //Check the ram settings against the used number of links
     CHECK_RAM_START_ADDR(CENTRAL_LINK_COUNT,PERIPHERAL_LINK_COUNT);
 
+		ble_enable_params.common_enable_params.vs_uuid_count   = 2;
+		//ble_enable_params.gatts_enable_params.attr_tab_size = 0x0900; //changing stack size?
+	
     // Enable BLE stack.
     err_code = softdevice_enable(&ble_enable_params);
     APP_ERROR_CHECK(err_code);
@@ -633,11 +700,16 @@ int main(void)
     ble_stack_init();
     device_manager_init(erase_bonds);
     gap_params_init();
-    advertising_init();
     services_init();
+		advertising_init();
     conn_params_init();
 		init_pwm();
+	  adc_init();
+		init_gpio();
 	
+		stepper_begin();
+		setMled(90);
+		setRGBled(10,0,0);
     // Start execution.
     application_timers_start();
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
