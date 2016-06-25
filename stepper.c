@@ -22,6 +22,12 @@
 #include "app_error.h"
 #include "led.h"
 
+#define RED_byte			0
+#define GREEN_byte		0
+#define BLUE_byte			0
+
+uint8_t positionIwantToGo = CENTER_STEP;
+
 static void on_ble_write(ble_cch_t * p_cch_service, ble_evt_t * p_ble_evt)
 {
     // Decclare buffer variable to hold received data. The data can only be 32 bit long.
@@ -39,46 +45,33 @@ static void on_ble_write(ble_cch_t * p_cch_service, ble_evt_t * p_ble_evt)
         // Get stepper data
 				sd_ble_gatts_value_get(p_cch_service->conn_handle, p_cch_service->charSTEP_handles.value_handle, &rx_data);
 				
-		
-		
-		
-		
-		
-		
-		
+				if (rx_data.p_value[0] < MAX_STEPS)
+					positionIwantToGo = rx_data.p_value[0];
+				else if (rx_data.p_value[0] > MAX_STEPS)
+					positionIwantToGo = MAX_STEPS;
+				
+				speed = rx_data.p_value[1] * 20;	
 		}
 		else if(p_ble_evt->evt.gatts_evt.params.write.handle == p_cch_service->charRGB_handles.value_handle)
     {
         // Get RGB data
 				sd_ble_gatts_value_get(p_cch_service->conn_handle, p_cch_service->charRGB_handles.value_handle, &rx_data);
 				
-		
-
-
-
-			if (rx_data.p_value[0] == 0xBB)
-					setRGBled(0,10,0);
-			
-    
-		
-		
-		
-		
+				if (rx_data.p_value[RED_byte] > 100)
+					rx_data.p_value[RED_byte] = 100;
+				if (rx_data.p_value[GREEN_byte] > 100)
+					rx_data.p_value[GREEN_byte] = 100;
+				if (rx_data.p_value[BLUE_byte] > 100)
+					rx_data.p_value[BLUE_byte] = 100;
+				
+				setRGBled(rx_data.p_value[RED_byte], rx_data.p_value[GREEN_byte], rx_data.p_value[BLUE_byte]);		
 		}
 		else if(p_ble_evt->evt.gatts_evt.params.write.handle == p_cch_service->charR_handles.value_handle)
     {
         // Get RED data
 				sd_ble_gatts_value_get(p_cch_service->conn_handle, p_cch_service->charR_handles.value_handle, &rx_data);
 				
-				
-			
-			
-			if (rx_data.p_value[0] == 0xBB)
-					setRGBled(0,10,0);
-				
-				
-				
-				
+				setMled(rx_data.p_value[0]);
 		}
 		else if(p_ble_evt->evt.gatts_evt.params.write.handle == p_cch_service->charSTEP_handles.cccd_handle)
     {
@@ -137,7 +130,7 @@ static uint32_t cch_char_add(ble_cch_t * p_cch_service)
     APP_ERROR_CHECK(err_code);
        
     memset(&charSTEP_md, 0, sizeof(charSTEP_md));
-    charSTEP_md.char_props.read = 0;
+    charSTEP_md.char_props.read = 1;
     charSTEP_md.char_props.write = 1;
     
     // Configuring Client Characteristic Configuration Descriptor metadata and add to char_md structure
@@ -193,7 +186,7 @@ static uint32_t cch_char_add(ble_cch_t * p_cch_service)
     APP_ERROR_CHECK(err_code);
        
     memset(&charRGB_md, 0, sizeof(charRGB_md));
-    charRGB_md.char_props.read = 0;
+    charRGB_md.char_props.read = 1;
     charRGB_md.char_props.write = 1;
     
     // Configuring Client Characteristic Configuration Descriptor metadata and add to char_md structure
@@ -250,7 +243,7 @@ static uint32_t cch_char_add(ble_cch_t * p_cch_service)
     APP_ERROR_CHECK(err_code);
        
     memset(&charR_md, 0, sizeof(charR_md));
-    charR_md.char_props.read = 0;
+    charR_md.char_props.read = 1;
     charR_md.char_props.write = 1;
     
     // Configuring Client Characteristic Configuration Descriptor metadata and add to char_md structure

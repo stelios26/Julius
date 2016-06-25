@@ -5,30 +5,17 @@
 #include <stdio.h>
 #include "app_util_platform.h"
 #include "app_pwm.h"
+#include "app_timer.h"
 #include "nrf_delay.h"
 #include "nrf_gpio.h"
 #include "nrf_adc.h"
 #include "nrf_delay.h"
-
-#define RED_LED          								20
-#define GREEN_LED       								21
-#define BLUE_LED         								19
-#define STEPPER_LED											13
-#define CHRG_STAT_PIN	 									0
-#define EN_5V_PIN												4												
-#define	STEPPER_SLEEP_PIN								18
-#define M_IN1														17
-#define M_IN2														16
-#define M_IN3														15
-#define M_IN4														14
-
-#define MAX_STEPS						158
-#define RAMP_UP_STEP				500
-#define DIAGNOSTIC_SPEED 		9000
-#define SPEED_LIMIT					2500
+#include "led.h"
+#include "stepper.h"
 
 uint8_t adc_result;
-uint8_t position;
+uint8_t position = 0;
+uint16_t speed = DIAGNOSTIC_SPEED;
 
 APP_PWM_INSTANCE(PWM1,1);                   // Create the instance "PWM1" using TIMER1.
 APP_PWM_INSTANCE(PWM2,2);                   // Create the instance "PWM2" using TIMER2.
@@ -81,7 +68,23 @@ void setRGBled(uint8_t RedDuty, uint8_t GreenDuty, uint8_t BlueDuty)
 		while (app_pwm_channel_duty_set(&PWM1, 1, GreenDuty) == NRF_ERROR_BUSY);
 		while (app_pwm_channel_duty_set(&PWM2, 0, BlueDuty) == NRF_ERROR_BUSY);
 }
+/*
+uint32_t getRGBled()
+{
+	uint8_t red, green, blue;
+	
+	red 	= app_pwm_channel_duty_get(&PWM1, 0);
+	green = app_pwm_channel_duty_get(&PWM1, 1);
+	blue	= app_pwm_channel_duty_get(&PWM2, 0);
+	
+	return ( (blue << 16) | (green << 8) | red );
+}
 
+uint8_t getMled()
+{
+		return app_pwm_channel_duty_get(&PWM2, 1);
+}
+*/
 void setMled(uint8_t MledDuty)
 {
 		while (app_pwm_channel_duty_set(&PWM2, 1, MledDuty) == NRF_ERROR_BUSY);
@@ -130,208 +133,87 @@ uint32_t is_charging(void)
 	return !(nrf_gpio_pin_read(CHRG_STAT_PIN));
 }
 
-void step1(void)
+void step(uint8_t step, uint16_t speed)
 {
-		nrf_gpio_pin_set(M_IN1);
-		nrf_gpio_pin_clear(M_IN2);
-		nrf_gpio_pin_set(M_IN3);
-		nrf_gpio_pin_clear(M_IN4);
-}
-
-void step2(void)
-{
-		nrf_gpio_pin_clear(M_IN1);
-		nrf_gpio_pin_clear(M_IN2);
-		nrf_gpio_pin_set(M_IN3);
-		nrf_gpio_pin_clear(M_IN4);
-}
-
-void step3(void)
-{
-		nrf_gpio_pin_clear(M_IN1);
-		nrf_gpio_pin_set(M_IN2);
-		nrf_gpio_pin_set(M_IN3);
-		nrf_gpio_pin_clear(M_IN4);
-}
-
-void step4(void)
-{
-		nrf_gpio_pin_clear(M_IN1);
-		nrf_gpio_pin_set(M_IN2);
-		nrf_gpio_pin_clear(M_IN3);
-		nrf_gpio_pin_clear(M_IN4);
-}
-
-void step5(void)
-{
-		nrf_gpio_pin_clear(M_IN1);
-		nrf_gpio_pin_set(M_IN2);
-		nrf_gpio_pin_clear(M_IN3);
-		nrf_gpio_pin_set(M_IN4);
-}
-
-void step6(void)
-{
-		nrf_gpio_pin_clear(M_IN1);
-		nrf_gpio_pin_clear(M_IN2);
-		nrf_gpio_pin_clear(M_IN3);
-		nrf_gpio_pin_set(M_IN4);
-}
-
-void step7(void)
-{
-		nrf_gpio_pin_set(M_IN1);
-		nrf_gpio_pin_clear(M_IN2);
-		nrf_gpio_pin_clear(M_IN3);
-		nrf_gpio_pin_set(M_IN4);
-}
-
-void step8(void)
-{
-		nrf_gpio_pin_set(M_IN1);
-		nrf_gpio_pin_clear(M_IN2);
-		nrf_gpio_pin_clear(M_IN3);
-		nrf_gpio_pin_clear(M_IN4);
-}
-
-void rotateC(uint8_t i, uint16_t speed)
-{
-	while(position < i)
+	switch(step)
 	{
-		/*step7();
-		nrf_delay_us(speed);
-		step8();
-		nrf_delay_us(speed);
-		step2();
-		nrf_delay_us(speed);
-		step3();
-		nrf_delay_us(speed);
-		step4();
-		nrf_delay_us(speed);
-		step6();
-		nrf_delay_us(speed);*/
-		step3();
-		nrf_delay_us(speed);
-		step5();
-		nrf_delay_us(speed);
-		step7();
-		nrf_delay_us(speed);
-		step1();
-		nrf_delay_us(speed);
+		case 1:
+				nrf_gpio_pin_clear(M_IN1);
+				nrf_gpio_pin_set(M_IN2);
+				nrf_gpio_pin_set(M_IN3);
+				nrf_gpio_pin_clear(M_IN4);
+				break;
+		
+		case 2:
+				nrf_gpio_pin_clear(M_IN1);
+				nrf_gpio_pin_set(M_IN2);
+				nrf_gpio_pin_clear(M_IN3);
+				nrf_gpio_pin_set(M_IN4);
+				break;
+		
+		case 3:
+				nrf_gpio_pin_set(M_IN1);
+				nrf_gpio_pin_clear(M_IN2);
+				nrf_gpio_pin_clear(M_IN3);
+				nrf_gpio_pin_set(M_IN4);
+				break;
+		
+		case 4:
+				nrf_gpio_pin_set(M_IN1);
+				nrf_gpio_pin_clear(M_IN2);
+				nrf_gpio_pin_set(M_IN3);
+				nrf_gpio_pin_clear(M_IN4);
+				break;
+	}
+	nrf_delay_us(speed);
+}
+
+void stepTo(uint8_t i)//, uint16_t speed)
+{
+	if (position < i)
+	{
+		step(1,speed);
+		step(2,speed);
+		step(3,speed);
+		step(4,speed-150);
 		position++;
 	}
-}
-
-void rotateCC(uint8_t i, uint16_t speed)
-{
-	while(position > i)
+	else if (position > i)
 	{
-		/*step6();
-		nrf_delay_us(speed);
-		step4();
-		nrf_delay_us(speed);
-		step3();
-		nrf_delay_us(speed);
-		step2();
-		nrf_delay_us(speed);
-		step8();
-		nrf_delay_us(speed);
-		step7();
-		nrf_delay_us(speed);*/
-		
-		step1();
-		nrf_delay_us(speed);
-		step7();
-		nrf_delay_us(speed);
-		step5();
-		nrf_delay_us(speed);
-		step3();
-		nrf_delay_us(speed);
+		step(4,speed);
+		step(3,speed);
+		step(2,speed);
+		step(1,speed-150);
 		position--;
 	}
 }
 
 void stepper_begin(void)
 {
-		uint32_t speed = DIAGNOSTIC_SPEED;
+		uint8_t i;
 	
 		nrf_gpio_pin_set(EN_5V_PIN);
 		nrf_delay_ms(1); //let 5V boost stabilize
 		nrf_gpio_pin_set(STEPPER_SLEEP_PIN);
 		nrf_delay_ms(2);	//let stepper charge pump stabilize
 		
-		//for (position=0; position<MAX_STEPS; position++)
-		//{
-			/*step6();
-			nrf_delay_ms(speed/1000);
-			step4();
-			nrf_delay_ms(speed/1000);
-			step3();
-			nrf_delay_ms(speed/1000);
-			step2();
-			nrf_delay_ms(speed/1000);
-			step8();
-			nrf_delay_ms(speed/1000);
-			step7();
-			nrf_delay_ms(speed/1000);*/
-		//	step7();
-			//nrf_delay_us(speed/1000);
-			//step5();
-		//	nrf_delay_us(speed/1000);
-		//	step3();
-		///	nrf_delay_us(speed/1000);
-		//	step1();
-		//	nrf_delay_us(speed/1000);
-		//}
+		for (i=1; i<MAX_STEPS+1; i++)
+		{
+			speed -= RAMP_UP_STEP;
+			stepTo(i);
+		}
 		
-		position = 0;
-		speed = 1500;
-		rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-		rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-		rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-		rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-		rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-				rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-				rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-				rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-				rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-				rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-				rotateC(MAX_STEPS,speed);
-		rotateCC(0,speed);
-		
-		
+		//speed = 1366 at the end of the for loop, just a bit of margin
+		//speed is actually period between successive steps so - means faster
+		//to actually force a step, need to be one below/above the position watch variable
 }
+/*
 
 void stepper_end(void)
 {
-		while(position < MAX_STEPS)
-		{
-				step7();
-				nrf_delay_ms(10);
-				step8();
-				nrf_delay_ms(10);
-				step2();
-				nrf_delay_ms(10);
-				step3();
-				nrf_delay_ms(10);
-				step4();
-				nrf_delay_ms(10);
-				step6();
-				nrf_delay_ms(10);
-				position++;
-		}
-		
+		stepTo(0,SPEED_LIMIT);
+	
 		nrf_gpio_pin_clear(EN_5V_PIN);
 		nrf_gpio_pin_clear(STEPPER_SLEEP_PIN);
-}
+}*/
 

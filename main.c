@@ -38,7 +38,6 @@
 #define APP_TIMER_OP_QUEUE_SIZE          4                                          /**< Size of timer operation queues. */
 
 #define BATTERY_LEVEL_MEAS_INTERVAL      APP_TIMER_TICKS(2000, APP_TIMER_PRESCALER) /**< Battery level measurement interval (ticks). */
-#define TEMPERATURE_MEAS_INTERVAL          		APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER) 	/**< Battery level measurement interval (ticks). */
 
 #define MIN_CONN_INTERVAL                MSEC_TO_UNITS(400, UNIT_1_25_MS)           /**< Minimum acceptable connection interval (0.4 seconds). */
 #define MAX_CONN_INTERVAL                MSEC_TO_UNITS(650, UNIT_1_25_MS)           /**< Maximum acceptable connection interval (0.65 second). */
@@ -74,7 +73,7 @@ static ble_bas_t                         m_bas;                                 
 ble_cch_t m_cch_service;
 
 APP_TIMER_DEF(m_battery_timer_id);                                                  /**< Battery timer. */
-APP_TIMER_DEF(m_RGB_timer_id);
+APP_TIMER_DEF(m_stepper_timer_id);
 
 static dm_application_instance_t         m_app_handle;                              /**< Application identifier allocated by device manager */
 
@@ -101,20 +100,12 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
-static void RGB_timeout_handler(void * p_context)
+void stepper_timeout_handler(void * p_context)
 {
-    uint32_t RGB = 0;  
-    static uint32_t previous_RGB = 0; 
-    
-    // Check if current temperature is different from last temperature
-    if(RGB != previous_RGB)
-    {
-        // If new temperature then send notification
-        cch_RGB_characteristic_update(&m_cch_service, &RGB);
-    }
-    
-    // Save current temperature until next measurement
-    previous_RGB = RGB;
+	if (position != positionIwantToGo)
+		stepTo(positionIwantToGo);
+	
+	app_timer_start(m_stepper_timer_id, STEPPER_STEP_INTERVAL, NULL);
 }
 
 /**@brief Function for performing battery measurement and updating the Battery Level characteristic
@@ -191,9 +182,9 @@ static void timers_init(void)
                                 battery_level_meas_timeout_handler);
     APP_ERROR_CHECK(err_code);
 	
-		err_code = app_timer_create(&m_RGB_timer_id,
-                              APP_TIMER_MODE_REPEATED,
-                              RGB_timeout_handler);
+		err_code = app_timer_create(&m_stepper_timer_id,
+                              APP_TIMER_MODE_SINGLE_SHOT,
+                              stepper_timeout_handler);
 		APP_ERROR_CHECK(err_code);
 }
 
@@ -503,14 +494,14 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             {
         case BLE_GAP_EVT_CONNECTED:
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-						app_timer_start(m_RGB_timer_id, TEMPERATURE_MEAS_INTERVAL, NULL);
+						app_timer_start(m_stepper_timer_id, 5, NULL);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
 						//err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
             //APP_ERROR_CHECK(err_code);
-						app_timer_stop(m_RGB_timer_id);
+						//app_timer_stop(m_RGB_timer_id);
             break;
 
         default:
@@ -701,9 +692,9 @@ int main(void)
 		init_gpio();
 	
 		stepper_begin();
-		setMled(90);
-		setRGBled(10,0,0);
-    // Start execution.
+		//setMled(90);
+		
+		// Start execution.
     application_timers_start();
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);

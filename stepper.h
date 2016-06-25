@@ -19,6 +19,8 @@
 #define BLE_UUID_RGB_CHARACTERISTC_UUID		 		0xFB13
 #define BLE_UUID_RED_CHARACTERISTC_UUID		 		0xFC14
 
+extern uint8_t positionIwantToGo;
+
 typedef struct
 {
     uint16_t                    conn_handle;    /**< Handle of the current connection (as provided by the BLE stack, is BLE_CONN_HANDLE_INVALID if not in a connection).*/
