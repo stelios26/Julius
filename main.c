@@ -74,7 +74,7 @@ static ble_bas_t                         m_bas;                                 
 ble_cch_t m_cch_service;
 
 APP_TIMER_DEF(m_battery_timer_id);                                                  /**< Battery timer. */
-APP_TIMER_DEF(m_temperature_timer_id);
+APP_TIMER_DEF(m_RGB_timer_id);
 
 static dm_application_instance_t         m_app_handle;                              /**< Application identifier allocated by device manager */
 
@@ -101,27 +101,20 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
-static void temperature_timeout_handler(void * p_context)
+static void RGB_timeout_handler(void * p_context)
 {
-    // Update temperature and characteristic value.
-    int32_t temperature = 0;    // Declare variable holding temperature value
-    static int32_t previous_temperature = 15; // Declare a variable to store current temperature until next measurement.
-    
-		//nrf_adc_start();
-  
-		//full scale 1.2V is 10 bits 1024, prescaler * 3, -750 for 0 then add 25 which is 750 and 10mv per C after that.
-		temperature = 25;
-	
+    uint32_t RGB = 0;  
+    static uint32_t previous_RGB = 0; 
     
     // Check if current temperature is different from last temperature
-    if(temperature != previous_temperature)
+    if(RGB != previous_RGB)
     {
         // If new temperature then send notification
-        cch_termperature_characteristic_update(&m_cch_service, &temperature);
+        cch_RGB_characteristic_update(&m_cch_service, &RGB);
     }
     
     // Save current temperature until next measurement
-    previous_temperature = temperature;
+    previous_RGB = RGB;
 }
 
 /**@brief Function for performing battery measurement and updating the Battery Level characteristic
@@ -198,9 +191,9 @@ static void timers_init(void)
                                 battery_level_meas_timeout_handler);
     APP_ERROR_CHECK(err_code);
 	
-		err_code = app_timer_create(&m_temperature_timer_id,
+		err_code = app_timer_create(&m_RGB_timer_id,
                               APP_TIMER_MODE_REPEATED,
-                              temperature_timeout_handler);
+                              RGB_timeout_handler);
 		APP_ERROR_CHECK(err_code);
 }
 
@@ -510,14 +503,14 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             {
         case BLE_GAP_EVT_CONNECTED:
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-						app_timer_start(m_temperature_timer_id, TEMPERATURE_MEAS_INTERVAL, NULL);
+						app_timer_start(m_RGB_timer_id, TEMPERATURE_MEAS_INTERVAL, NULL);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
 						//err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
             //APP_ERROR_CHECK(err_code);
-						app_timer_stop(m_temperature_timer_id);
+						app_timer_stop(m_RGB_timer_id);
             break;
 
         default:
