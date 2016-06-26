@@ -196,6 +196,7 @@ void stepper_begin(void)
 		nrf_delay_ms(1); //let 5V boost stabilize
 		nrf_gpio_pin_set(STEPPER_SLEEP_PIN);
 		nrf_delay_ms(2);	//let stepper charge pump stabilize
+		setMled(20);
 		
 		speed = DIAGNOSTIC_SPEED;
 		//to actually force a step, need to be one below/above the position watch variable
@@ -228,5 +229,7 @@ void stepper_end(void)
 	
 		nrf_gpio_pin_clear(EN_5V_PIN);
 		nrf_gpio_pin_clear(STEPPER_SLEEP_PIN);
+		setMled(0);
+		setRGBled(0,0,0);
 }
 

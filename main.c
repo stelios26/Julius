@@ -694,8 +694,6 @@ int main(void)
 		init_pwm();
 	  adc_init();
 		init_gpio();
-		//stepper_begin();
-		//setMled(90);
 		
 		// Start execution.
     application_timers_start();
