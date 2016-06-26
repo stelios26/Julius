@@ -23,8 +23,11 @@
 #include "led.h"
 
 #define RED_byte			0
-#define GREEN_byte		0
-#define BLUE_byte			0
+#define GREEN_byte		1
+#define BLUE_byte			2
+#define MLED_byte			0
+#define POSITION_byte	0
+#define SPEED_byte		1
 
 uint8_t positionIwantToGo = CENTER_STEP;
 
@@ -45,12 +48,13 @@ static void on_ble_write(ble_cch_t * p_cch_service, ble_evt_t * p_ble_evt)
         // Get stepper data
 				sd_ble_gatts_value_get(p_cch_service->conn_handle, p_cch_service->charSTEP_handles.value_handle, &rx_data);
 				
-				if (rx_data.p_value[0] < MAX_STEPS)
-					positionIwantToGo = rx_data.p_value[0];
-				else if (rx_data.p_value[0] > MAX_STEPS)
+				if (rx_data.p_value[POSITION_byte] > MAX_STEPS)
 					positionIwantToGo = MAX_STEPS;
 				
-				speed = rx_data.p_value[1] * 20;	
+				positionIwantToGo = rx_data.p_value[POSITION_byte];
+				
+				speed = SPEED_LIMIT + (0xff - rx_data.p_value[SPEED_byte]) * 40;
+				//speed = rx_data.p_value[SPEED_byte] * 40;	
 		}
 		else if(p_ble_evt->evt.gatts_evt.params.write.handle == p_cch_service->charRGB_handles.value_handle)
     {
@@ -71,7 +75,10 @@ static void on_ble_write(ble_cch_t * p_cch_service, ble_evt_t * p_ble_evt)
         // Get RED data
 				sd_ble_gatts_value_get(p_cch_service->conn_handle, p_cch_service->charR_handles.value_handle, &rx_data);
 				
-				setMled(rx_data.p_value[0]);
+				if (rx_data.p_value[MLED_byte] > 100)
+					rx_data.p_value[MLED_byte] = 100;
+				
+				setMled(rx_data.p_value[MLED_byte]);
 		}
 		else if(p_ble_evt->evt.gatts_evt.params.write.handle == p_cch_service->charSTEP_handles.cccd_handle)
     {

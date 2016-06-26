@@ -16,7 +16,7 @@
 
 #define MAX_STEPS						158
 #define CENTER_STEP					79
-#define RAMP_UP_STEP				23				
+#define RAMP_UP_STEP				50				
 #define DIAGNOSTIC_SPEED 		5000
 #define SPEED_LIMIT					1300
 

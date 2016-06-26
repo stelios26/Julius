@@ -197,23 +197,36 @@ void stepper_begin(void)
 		nrf_gpio_pin_set(STEPPER_SLEEP_PIN);
 		nrf_delay_ms(2);	//let stepper charge pump stabilize
 		
+		speed = DIAGNOSTIC_SPEED;
+		//to actually force a step, need to be one below/above the position watch variable
 		for (i=1; i<MAX_STEPS+1; i++)
 		{
-			speed -= RAMP_UP_STEP;
+			//speed is actually period between successive steps so - means faster
+			//accelerate to one end
+			if (speed > SPEED_LIMIT)
+				speed -= RAMP_UP_STEP;
+			
 			stepTo(i);
 		}
-		
-		//speed = 1366 at the end of the for loop, just a bit of margin
-		//speed is actually period between successive steps so - means faster
-		//to actually force a step, need to be one below/above the position watch variable
+		//then go to midpoint
+		for (i=position; i>CENTER_STEP-1; i--)
+		{
+			stepTo(i);
+		}		
 }
-/*
 
 void stepper_end(void)
-{
-		stepTo(0,SPEED_LIMIT);
+{		
+		uint8_t i;
+	
+		//park with speed limit
+		speed = SPEED_LIMIT;
+		for (i=position; i>0; i--)
+			stepTo(i);
+		
+		stepTo(0);
 	
 		nrf_gpio_pin_clear(EN_5V_PIN);
 		nrf_gpio_pin_clear(STEPPER_SLEEP_PIN);
-}*/
+}
 

@@ -117,7 +117,7 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>DLGUARM</Key>
-          <Name></Name>
+          <Name>/</Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -151,7 +151,7 @@
           <Type>0</Type>
           <LineNumber>71</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>112736</Address>
+          <Address>112692</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
@@ -178,6 +178,11 @@
           <count>2</count>
           <WinNumber>1</WinNumber>
           <ItemText>positionIwantToGO,0x0A</ItemText>
+        </Ww>
+        <Ww>
+          <count>3</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>positionIwantToGo,0x0A</ItemText>
         </Ww>
       </WatchWindow1>
       <Tracepoint>

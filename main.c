@@ -494,14 +494,18 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             {
         case BLE_GAP_EVT_CONNECTED:
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-						app_timer_start(m_stepper_timer_id, 5, NULL);
+						stepper_begin();
+						positionIwantToGo = CENTER_STEP;
+						app_timer_start(m_stepper_timer_id, STEPPER_STEP_INTERVAL, NULL);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
+						stepper_end();
+						app_timer_stop(m_stepper_timer_id);
+						
 						//err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
             //APP_ERROR_CHECK(err_code);
-						//app_timer_stop(m_RGB_timer_id);
             break;
 
         default:
@@ -690,8 +694,7 @@ int main(void)
 		init_pwm();
 	  adc_init();
 		init_gpio();
-	
-		stepper_begin();
+		//stepper_begin();
 		//setMled(90);
 		
 		// Start execution.
